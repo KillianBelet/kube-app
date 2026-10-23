@@ -1,0 +1,93 @@
+name: CI - Application
+
+on:
+  push:
+    branches: [ develop, feature/**, feat/** ]
+  pull_request:
+    branches: [ develop, main ]
+
+permissions:
+  pull-requests: write
+  issues: write
+  contents: read
+
+jobs:
+  lint-helm:
+    name: Lint App Helm chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Helm
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Lint Helm chart
+        run: |
+          find . -name "Chart.yaml" | while read chart; do
+            dir=$(dirname "$chart")
+            echo "Linting $dir..."
+            helm lint "$dir"
+          done
+
+  validate-kustomize:
+    name: Validate Kustomize overlays
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kubectl + kustomize
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+
+      - name: Build kustomize overlays
+        run: |
+          find . -name "kustomization.yaml" | while read k; do
+            dir=$(dirname "$k")
+            echo "Building $dir..."
+            kubectl kustomize "$dir" > /dev/null && echo "OK: $dir"
+          done
+
+  validate-kubernetes:
+    name: Validate Kubernetes manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate YAML syntax
+        run: |
+          find . -name "*.yaml" -o -name "*.yml" | grep -v ".github" | while read f; do
+            python3 -c "import yaml; list(yaml.safe_load_all(open('$f')))" && echo "OK: $f" || echo "FAIL: $f"
+          done
+
+  security-secrets:
+    name: Check for secrets in code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install gitleaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.0/gitleaks_8.18.0_linux_x64.tar.gz | tar -xz
+          sudo mv gitleaks /usr/local/bin/
+
+      - name: Scan for secrets
+        run: gitleaks detect --source . --no-git || true
+
+  validate-structure:
+    name: Validate app repo structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required structure
+        run: |
+          dirs=("helm" "gitops" "docs")
+          for d in "${dirs[@]}"; do
+            if [ -d "$d" ]; then
+              echo "OK: $d/"
+            else
+              echo "MISSING: $d/"
+            fi
+          done
