@@ -1,0 +1,6 @@
+apiVersion: v2
+name: kube-app
+description: Helm chart pour l'application kube-app (groupe 12)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
