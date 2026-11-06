@@ -1,0 +1,12 @@
+.git
+.github
+.env
+.env.*
+vendor
+node_modules
+deploy
+tests
+docker-compose.yaml
+Dockerfile
+.dockerignore
+storage/logs/*

@@ -6,14 +6,14 @@ Manifests de déploiement de l'application, prêts à être synchronisés par Ar
 
 - `chart/` — chart Helm de l'application (image app + ConfigMap + Service + Ingress)
 
-Port et variables d'environnement repris de `docker-compose.yaml` (app sur le port 80,
+Port et variables d'environnement repris de `docker-compose.yaml` (app sur le port 8080,
 connexion MySQL via `DB_HOST`/`DB_PORT`/`DB_DATABASE`/`DB_USERNAME`).
 
 ## Test local
 
 ```bash
 helm lint deploy/chart
-helm template kube-app deploy/chart
+helm template kube-app deploy/chart --set image.tag=test
 ```
 
 ## À faire (prochains tickets)
