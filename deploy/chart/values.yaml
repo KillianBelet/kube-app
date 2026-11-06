@@ -1,8 +1,9 @@
 replicaCount: 1
 
 image:
-  repository: CHANGE_ME_registry/kube-app
-  tag: latest
+  repository: ghcr.io/killianbelet/kube-app
+  # SHA du commit (jamais latest), obligatoire au déploiement : --set image.tag=<sha>
+  tag: ""
   pullPolicy: IfNotPresent
 
 nodeSelector: {}
@@ -19,7 +20,7 @@ resources:
 service:
   type: ClusterIP
   port: 80
-  targetPort: 80
+  targetPort: 8080
 
 ingress:
   enabled: true

@@ -1,30 +1,32 @@
-# Utilisez une image Docker officielle pour PHP 7.4 avec Apache
+# ---- Étape 1 : dépendances PHP (Composer) ----
+FROM composer:2 AS vendor
+WORKDIR /app
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-scripts --no-interaction --prefer-dist \
+    --ignore-platform-reqs
+
+# ---- Étape 2 : image finale (sans Composer, git ni dépendances de dev) ----
 FROM php:8.2.8-apache
 
-# Installez les extensions PHP nécessaires
-RUN docker-php-ext-install pdo_mysql
+RUN docker-php-ext-install pdo_mysql \
+ && a2enmod rewrite
 
-RUN apt-get update && apt-get install -y git unzip p7zip-full
+# Un utilisateur non-root ne peut pas écouter sur le port 80 : Apache passe sur 8080
+ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
+RUN sed -i 's/Listen 80/Listen 8080/' /etc/apache2/ports.conf \
+ && sed -i 's/:80>/:8080>/' /etc/apache2/sites-available/000-default.conf \
+ && sed -ri 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf \
+ && sed -ri 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 
-# Installez Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+WORKDIR /var/www/html
+COPY . .
+COPY --from=vendor /app/vendor ./vendor
+# Ces dossiers vides ne sont pas dans Git, Laravel en a besoin pour démarrer
+RUN mkdir -p bootstrap/cache storage/logs storage/framework/cache/data \
+             storage/framework/sessions storage/framework/views \
+ && php artisan package:discover --ansi \
+ && chown -R www-data:www-data storage bootstrap/cache
 
-# Copiez les fichiers de l'application dans le conteneur
-COPY . /var/www/html/
-
-# Installez les dépendances de l'application
-RUN composer install
-
-RUN chown -R www-data:www-data /var/www/html/vendor /var/www/html/storage /var/www/html/bootstrap /var/www/html/public /var/www/html/app /var/www/html/config /var/www/html/routes /var/www/html/resources
-RUN chmod -R 755 /var/www/html/vendor /var/www/html/storage /var/www/html/bootstrap /var/www/html/public /var/www/html/app /var/www/html/config /var/www/html/routes /var/www/html/resources
-
-# Modifiez la configuration d'Apache pour pointer vers le répertoire public
-ENV APACHE_DOCUMENT_ROOT /var/www/html/public
-RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
-RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
-
-# Activez le module Apache Rewrite
-RUN a2enmod rewrite
-
-# Exposez le port 80
-EXPOSE 80
+# UID numérique (www-data = 33) : Kubernetes en a besoin pour vérifier runAsNonRoot
+USER 33:33
+EXPOSE 8080
